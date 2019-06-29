@@ -22,9 +22,7 @@ def mistura(Xtr, Ytr, lista_config_especialistas):
     ns = Ytr.shape[1]
     Xtr = np.append(Xtr, np.ones([Xtr.shape[0], 1]), axis=1)
     ne = ne + 1
-    #####
- #   rn_mlp_ME.valid()
-    ######
+
     # Inicializa Rede Gating
     Wg = np.random.rand(m, ne)
 
@@ -43,23 +41,14 @@ def mistura(Xtr, Ytr, lista_config_especialistas):
     baixo = np.reshape(baixo, (len(baixo), 1))
     ones = np.ones([1, m])
     Yg = cima / baixo * ones
-    # Yg = np.exp( np.dot(Xtr, Wg.T) ) / (np.sum( np.exp( np.dot(Xtr, Wg.T)), 1)) * np.ones([1, m])
 
     # Implementar aqui a MLP
     # Calcula a saida dos Especialistas
     # Modelo Linear
     Ye = np.zeros([m, Ntr, ns])
-#    for i in range(m):
-#        Ye[i] = np.dot(Xtr, W[i].T)
-
-################################################################################
 
     especialistaLista = list()
-
     for i in range(m):
-        # Cria a classe de NN
-
-###########################################################
 
         config_rede_neural = lista_config_especialistas[i]
 
@@ -77,12 +66,11 @@ def mistura(Xtr, Ytr, lista_config_especialistas):
 
             nn_R = rn.RedeNeural_MLP().criar_rede_neural(config_rede_neural.tipo_rede_neural)
             # Definir camadas da Rede
-            nn_R.adicionar_camada(camada.CamadaRecorrente(len(Xtr[0]), ne, 'tanh', W[i].T, None, atraso=True))
-            nn_R.adicionar_camada(camada.CamadaRecorrente(ne, 1, 'tanh'))
+            nn_R.adicionar_camada(camada.Camada(len(Xtr[0]), ne, 'tanh', W[i].T, None))
+            nn_R.adicionar_camada(camada.Camada(ne, 1, 'tanh'))
 
             mse, x = nn_R.treinar(Xtr, Ytr, 0.01, 5000)
             Ye[i] = nn_R.feed_forward(Xtr)
-
 
         #plt.plot(Ye[i])
         #plt.plot(Ytr)
@@ -142,15 +130,7 @@ def mistura(Xtr, Ytr, lista_config_especialistas):
         Yg_d = np.dot(Yg_b, Yg_c)
         Yg = Yg_a / Yg_d
 
-        # Implementar aqui a MLP
-        #for i in range(m):
-        #    # Ye{i}=Xtr*W{i}';
-        #    Ye[i] = np.dot(Xtr, W[i].T)
-        #####
         for i in range(len(especialistaLista)):
-            # Cria a classe de NN
-
-##############################################################
 
             nn_R = especialistaLista[i]
             #nn.camadas[0].pesos = W[i].T
@@ -159,38 +139,23 @@ def mistura(Xtr, Ytr, lista_config_especialistas):
             mse, x = nn_R.treinar(Xtr, Ytr, 0.01, 5000)
             Ye[i] = nn_R.feed_forward(Xtr)
 
-            #plt.plot(Ye[i])
-            #plt.plot(Ytr)
-            #plt.show()
 
-###############################################################
-
-        ####
-
-        # Ym=zeros(Ntr,ns);
         Ym = np.zeros([Ntr, ns])
 
         for i in range(m):
-            # Yge=Yg(:,i)*ones(1,ns);
             Yge = Yg[:, i] * np.ones([1, ns])
-            # Ym = Ym + Ye{i}.*Yge;
             Ym = Ym + Ye[i] * Yge
 
         # Cálculo da função de Verossimilhança
         for i in range(m):
             Yaux = Ye[i]
             for j in range(Ntr):
-                # diff = Ytr(j,:)-Yaux(j,:);
                 diff = Ytr[j, :] - Yaux[j, :]
-                # Py(j,i)=exp(-(diff*diff')/(2*var(i)));
                 Py[j][i] = np.exp(-np.dot(diff, diff.T) / (2 * variancia[i]))
 
-        # Likelihood = sum(log(sum(Yg.*Py,2)))
         Likelihood = np.sum(np.log(np.sum(Yg * Py, 1)))
 
-        # me.gating=Wg;
     rede_gating = Wg
-    # me.expert.W=W;
     especialistas = W
 
     especialistas_variancia = np.copy(variancia)
@@ -275,7 +240,6 @@ def maximiza_expert(W, variancia, Xtr, Ytr, h):
         val_final = np.dot(val_1, val_2)
         soma = soma + val_final
 
-    # variancia = max(0.05, (1/ns) * soma/sum(h));
     max_esq = 0.05
     max_dir_a = (1 / ns)
     max_dir_b = soma / np.sum(h, axis=0)
@@ -295,72 +259,32 @@ def predizer(rede_gating, especialistas, especialistaLista, X, Y):
     # Calcula saida Especialistas
     num_espec = len(especialistas)
     Ye = np.zeros([num_espec, len(X), 1])  # considerando que da rede tenha 1 saida
-    marge_acerto_especialistas = np.zeros([Ye.shape[0], 2])
-    especialista_vencedor = 0
-    max_acerto = 0
     for i in range(num_espec):
         nn = especialistaLista[i]
-        #nn.camadas[0].pesos = especialistas[i].T
-        #Ye[i] = nn.predizer(X)
         Ye[i] = nn.feed_forward(X)
 
         saida_rede_dn = nd.desnormalizacaoDados(media, desvioPadrao, Ye[i])
         Y_DN = nd.desnormalizacaoDados(media, desvioPadrao, Y)
 
-        plt.plot(saida_rede_dn, label='Predição Especialista '+str(i))
-        plt.plot(Y_DN, label='Validação Especialista '+str(i))
+        plt.plot(saida_rede_dn, label='Predição Especialista '+str(i+1))
+        plt.plot(Y_DN, label='Validação Especialista '+str(i+1))
         plt.legend(loc='upper rigth')
-
-        #plt.plot(Ye[i])
-        #plt.plot(Y)
-        #plt.plot(Yg)
-        #plt.show()
-
-        #Ye[i] = np.dot(X, especialistas[i].T)
-        marge_acerto_especialistas[i][0] = i
-        num_acerto = 0
-        for j in range(Ye[i].shape[0]):
-            print(' compare Ye: ',Ye[i][j][0],' Ye round ',round(Ye[i][j][0]),' Y: ',Y[j][0],' result: ',round(Ye[i][j][0], 1)==round(Y[j][0], 1))
-            if round(Ye[i][j][0], 1) == round(Y[j][0], 1):
-                num_acerto+=1
-        if num_acerto > 0:
-            marge_acerto = num_acerto*100/Ye[i].shape[0]
-        else:
-            marge_acerto = 0
-        marge_acerto_especialistas[i][1] = marge_acerto
-        if marge_acerto > max_acerto:
-            max_acerto = marge_acerto
-            especialista_vencedor = i
-            marge_acerto_especialistas[i][0] = especialista_vencedor
-
-    # Verifica o ESPECIALISTA vencedor (de acordo com a GATING)
-    #especialista_vencedor, total = np.unique(Yg.argmax(1), return_counts=True)
-    print("Rede Gating:", Yg)
-    print("Todos Especialistas:", Ye)
-    print("Especialista Vencedor:", especialista_vencedor)
-    print("Y do Vencedor:", Ye[especialista_vencedor])
-
-    for i in range(Ye[especialista_vencedor].shape[0]):
-        print(' Ye: ',Ye[especialista_vencedor][i][0],' Ye round ',round(Ye[especialista_vencedor][i][0]),'',Y[i][0])
-
-    print("Marge de acerto ", marge_acerto_especialistas[especialista_vencedor][1])
 
     #saída da gate
-    for i in range(len(Yg)):
-        plt.plot(Yg[i], label='Saída Gate Especialista'+str(i))
+    for i in range(Yg.shape[1]):
+        saida_gate_desnormalizada = nd.desnormalizacaoDados(media, desvioPadrao, Yg[:,i])
+        plt.plot(saida_gate_desnormalizada, label='Saída Gate Especialista'+ str(i+1))
         plt.legend(loc='upper rigth')
+
+    media_gate = np.average(Yg, axis=1)
+    media_gate_desnormalizada = nd.desnormalizacaoDados(media, desvioPadrao, media_gate)
+    plt.plot(media_gate_desnormalizada, label='Saída Mistura')
+    plt.plot(Y, label='Validação')
+    plt.legend(loc='upper rigth')
+
     plt.show()
 
-####
-#X = np.array([[1], [2], [3], [4]])
-#nd.normalizacaoDados(X)
-#lags = 4
-#st.maximiza_expert(X, lags)
-###
-
 # Dados Treinamento
-#X = np.array([[0, 0], [1, 0], [0, 1], [1, 1]])
-#Y = np.array([[0], [0], [0], [1]])
 
 #############################Treinamento################################################
 serie_txt = np.array(manipulacao.ManipulacaoDados.carregar_arquivo('serie1_trein.txt'))
@@ -390,23 +314,16 @@ listaConfiguracao = list()
 camadasEspecialista1 = list()
 camadasEspecialista1.append(Camada('sigmoid', 11, 11))
 camadasEspecialista1.append(Camada('tanh', 11, 1))
-listaConfiguracao.append(Configuracao('batch', camadasEspecialista1)) #tangente hiperbólica
+listaConfiguracao.append(Configuracao('batch', camadasEspecialista1))
 
 camadasEspecialista2 = list()
 camadasEspecialista2.append(Camada('tanh', 11, 11))
 camadasEspecialista2.append(Camada('tanh', 11, 1))
-listaConfiguracao.append(Configuracao('recorrente', camadasEspecialista2))  #tangente hiperbólica
+listaConfiguracao.append(Configuracao('recorrente', camadasEspecialista2))
 
 rede_gating, especialistas, especialistas_variancia, especialistaLista = mistura(X_t, Y_t, listaConfiguracao)
 
-#X_Test = np.array([[0, 1]])
-#Y_Test = np.array([[1]])
+X_v = X[45:]
+Y_v = Y[45:]
 
-#predizer(rede_gating, especialistas, X_Test, Y_Test)
-#print("\n")
-#X_Test = np.array([[0, 0], [1, 0], [0, 1], [1, 1]])
-#Y_Test = np.array([[0], [0], [0], [1]])
-
-
-
-predizer(rede_gating, especialistas, especialistaLista, X_t, Y_t)
+predizer(rede_gating, especialistas, especialistaLista, X_v, Y_v)
